@@ -3,10 +3,10 @@ add_compile_options (--std=gnu11 -O3 -Wall -Wextra)
 add_definitions (-D_GNU_SOURCE)
 set (THREAD_LIBRARY pthread)
 if (CMAKE_SYSTEM_NAME MATCHES Linux)
-    set (EXPORTS_LINKER_FLAGS "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/libnrsc5.map")
+    set (EXPORTS_LINKER_FLAGS "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/libnrsc5-${SDR_DRIVER}.map")
 elseif (CMAKE_SYSTEM_NAME MATCHES Darwin)
     set (CMAKE_MACOSX_RPATH ON)
-    set (EXPORTS_LINKER_FLAGS "-exported_symbols_list ${CMAKE_CURRENT_SOURCE_DIR}/libnrsc5.sym")
+    set (EXPORTS_LINKER_FLAGS "-exported_symbols_list ${CMAKE_CURRENT_SOURCE_DIR}/libnrsc5-${SDR_DRIVER}.sym")
 elseif (CMAKE_SYSTEM_NAME MATCHES Windows)
     set (EXPORTS_LINKER_FLAGS "-Wl,--exclude-all-symbols")
     set (SOCKET_LIBRARY ws2_32)
@@ -19,7 +19,7 @@ configure_file (config.h.in config.h)
 include_directories (
     ${FAAD2_INCLUDE_DIRS}
     ${AO_INCLUDE_DIRS}
-    ${RTL_SDR_INCLUDE_DIRS}
+    ${SDR_DRIVER_INCLUDE_DIRS}
     ${FFTW3F_INCLUDE_DIRS}
     "${CMAKE_CURRENT_BINARY_DIR}"
     "${CMAKE_SOURCE_DIR}/include"
@@ -27,7 +27,7 @@ include_directories (
 link_directories (
     ${FAAD2_LIBRARY_DIRS}
     ${AO_LIBRARY_DIRS}
-    ${RTL_SDR_LIBRARY_DIRS}
+    ${SDR_DRIVER_LIBRARY_DIRS}
     ${FFTW3F_LIBRARY_DIRS}
     ${LIBUSB_LIBRARY_DIRS}
 )
@@ -39,9 +39,9 @@ set (LIBRARY_FILES
     here_images.c
     input.c
     nrsc5.c
+    nrsc5-${SDR_DRIVER}.c
     output.c
     pids.c
-    rtltcp.c
     sync.c
 
     firdecim_q15.c
@@ -54,13 +54,15 @@ set (LIBRARY_FILES
     unicode.c
 
     strndup.c
+
+    ${SDR_DRIVER_EXTRA_SOURCES}
 )
 
 set (
     LibraryDependencies
     ${FAAD2_LIBRARIES}
     ${FFTW3F_LIBRARIES}
-    ${RTL_SDR_LIBRARIES}
+    ${SDR_DRIVER_LIBRARIES}
     ${THREAD_LIBRARY}
     ${SOCKET_LIBRARY}
     m
@@ -97,6 +99,7 @@ if (BUILD_CLI)
     add_executable (
         app
         main.c
+        main-${SDR_DRIVER}.c
         log.c
     )
     set_property (TARGET app PROPERTY OUTPUT_NAME nrsc5)

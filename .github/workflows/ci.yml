@@ -1,10 +1,24 @@
 name: CI
 
-on: [push, pull_request]
+#on: [push, pull_request]
+on:
+  workflow_dispatch:
+    inputs:
+      sdr_driver:
+        description: 'SDR driver (rtlsdr, sdrplay, soapy)'
+        required: true
+        default: 'sdrplay'
+  push:
+    tags:
+      - '**'
+
+env:
+  SDRPLAY_SOFTWARE_DOWNLOADS: 'https://www.sdrplay.com/software'
 
 jobs:
-  ubuntu-build:
-    name: Ubuntu CI
+  ubuntu-build-rtlsdr:
+    name: Ubuntu CI RTL-SDR
+    if: github.event.inputs.sdr_driver == 'rtlsdr'
     strategy:
       matrix:
         os: [ubuntu-22.04, ubuntu-24.04]
@@ -43,10 +57,11 @@ jobs:
       - name: Windows cross-compile
         run: |
           sudo apt-get install -y mingw-w64
-          support/win-cross-compile 32 --cmake-args="-DUSE_SSE=ON" -j4
-          support/win-cross-compile 64 --cmake-args="-DUSE_SSE=ON" -j4
-  macos-build:
-    name: MacOS CI
+          support/win-cross-compile 32 rtlsdr --cmake-args="-DUSE_SSE=ON" -j4
+          support/win-cross-compile 64 rtlsdr --cmake-args="-DUSE_SSE=ON" -j4
+  macos-build-rtlsdr:
+    name: MacOS CI RTL-SDR
+    if: github.event.inputs.sdr_driver == 'rtlsdr'
     strategy:
       matrix:
         os: [macos-14, macos-15, macos-15-intel]
@@ -90,5 +105,109 @@ jobs:
         run: |
           brew install --cask xquartz wine-stable
           brew install mingw-w64
-          support/win-cross-compile 32 --cmake-args="-DUSE_SSE=ON" -j4
-          support/win-cross-compile 64 --cmake-args="-DUSE_SSE=ON" -j4
+          support/win-cross-compile 32 rtlsdr --cmake-args="-DUSE_SSE=ON" -j4
+          support/win-cross-compile 64 rtlsdr --cmake-args="-DUSE_SSE=ON" -j4
+
+  ubuntu-build-sdrplay:
+    name: Ubuntu CI SDRplay API 3.X
+    if: ${{ github.event.inputs.sdr_driver == 'sdrplay' || startsWith(github.ref, 'refs/tags/') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install dependencies
+        run: sudo apt-get update -qq && sudo apt-get install -y libao-dev libfftw3-dev python3-pyaudio
+      - name: Install SDRplay API 3.X
+        env:
+          SDRPLAY_API_FILE_LINUX: SDRplay_RSP_API-Linux-3.15.2.run
+        run: |
+          curl -s -S -O "$SDRPLAY_SOFTWARE_DOWNLOADS/$SDRPLAY_API_FILE_LINUX"
+          sh "$SDRPLAY_API_FILE_LINUX" --noexec --quiet --keep
+          sudo mv package/inc/* /usr/local/include/
+          sudo mv package/amd64/libsdrplay_api.so.* /usr/local/lib/
+          sudo ln -s libsdrplay_api.so.3.15 /usr/local/lib/libsdrplay_api.so.3
+          sudo ln -s libsdrplay_api.so.3 /usr/local/lib/libsdrplay_api.so
+          sudo ldconfig
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Configure
+        run: |
+          mkdir build
+          cd build
+          cmake -DSDR_DRIVER="sdrplay" ..
+      - name: Compile
+        working-directory: build
+        run: make -j4
+      - name: Install
+        working-directory: build
+        run: |
+          sudo make install
+          sudo ldconfig
+      - name: Windows cross-compile
+        env:
+          SDRPLAY_API_FILE_WINDOWS: SDRplay_RSP_API-Windows-3.15.exe
+          SDRPLAY_API_BASE_DIR: ${{ runner.workspace }}/SDRplay
+        run: |
+          sudo apt-get install -y mingw-w64 innoextract
+          curl -s -S -O "$SDRPLAY_SOFTWARE_DOWNLOADS/$SDRPLAY_API_FILE_WINDOWS"
+          innoextract "$SDRPLAY_API_FILE_WINDOWS" -I app/API -d "$SDRPLAY_API_BASE_DIR"
+          support/win-cross-compile 32 sdrplay --cmake-args="-DUSE_SSE=ON" -j4
+          support/win-cross-compile 64 sdrplay --cmake-args="-DUSE_SSE=ON" -j4
+          mv build-win32/bin/nrsc5.exe nrsc5-32.exe
+          mv build-win64/bin/nrsc5.exe nrsc5-64.exe
+          { cat LICENSE; echo; echo; echo "Type 'accept all licenses' as the password below."; echo; echo; } | zip -z -P 'accept all licenses' nrsc5-windows-32.zip nrsc5-32.exe
+          { cat LICENSE; echo; echo; echo "Type 'accept all licenses' as the password below."; echo; echo; } | zip -z -P 'accept all licenses' nrsc5-windows-64.zip nrsc5-64.exe
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            nrsc5-windows-32.zip
+            nrsc5-windows-64.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  macos-build-sdrplay:
+    name: MacOS CI SDRplay API 3.X
+    if: ${{ github.event.inputs.sdr_driver == 'sdrplay' || startsWith(github.ref, 'refs/tags/') }}
+    runs-on: macos-15
+    steps:
+      - name: Install dependencies
+        run: |
+          brew install autoconf automake libtool libao fftw portaudio
+          python3 -m venv ${{ runner.temp }}/venv
+          source ${{ runner.temp }}/venv/bin/activate
+          pip3 install pyaudio
+      - name: Install SDRplay API 3.X
+        env:
+          SDRPLAY_API_FILE_MACOS: SDRplayAPI-macos-installer-universal-3.15.1.pkg
+        run: |
+          curl -s -S -O "$SDRPLAY_SOFTWARE_DOWNLOADS/$SDRPLAY_API_FILE_MACOS"
+          sudo installer -pkg "$SDRPLAY_API_FILE_MACOS" -target /
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Configure
+        run: |
+          mkdir build
+          cd build
+          cmake -DSDR_DRIVER="sdrplay" ..
+      - name: Compile
+        working-directory: build
+        run: |
+          make -j4
+          mv src/nrsc5 nrsc5-macos
+          { cat ../LICENSE; echo; echo; echo "Type 'accept all licenses' as the password below."; echo; echo; } | zip -z -P 'accept all licenses' ../nrsc5-macos.zip nrsc5-macos
+      #- name: Install
+      #  working-directory: build
+      #  run: make install
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: nrsc5-macos.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #- name: Windows cross-compile
+      #  run: |
+      #    brew install --cask xquartz wine-stable
+      #    brew install mingw-w64
+      #    support/win-cross-compile 32 sdrplay --cmake-args="-DUSE_SSE=ON" -j4
+      #    support/win-cross-compile 64 sdrplay --cmake-args="-DUSE_SSE=ON" -j4

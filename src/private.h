@@ -1,7 +1,14 @@
 #pragma once
 
 #include <pthread.h>
+#ifdef USE_RTLSDR
 #include <rtl-sdr.h>
+#elif defined USE_SDRPLAY
+#include <sdrplay_api.h>
+#elif defined USE_SOAPY
+#include <SoapySDR/Device.h>
+#include <SoapySDR/Formats.h>
+#endif
 #include <stdio.h>
 
 #include <nrsc5.h>
@@ -10,20 +17,42 @@
 #include "defines.h"
 #include "input.h"
 #include "output.h"
+#ifdef USE_RTLSDR
 #include "rtltcp.h"
+#endif
 
 extern pthread_mutex_t fftw_mutex;
 
 struct nrsc5_t
 {
+#ifdef USE_RTLSDR
     rtlsdr_dev_t *dev;
     FILE *iq_file;
     rtltcp_t *rtltcp;
     uint8_t samples_buf[128 * 256];
+#elif defined USE_SDRPLAY
+    sdrplay_api_DeviceT dev;
+    FILE *iq_file;
+    sdrplay_api_DeviceParamsT *dev_params;
+    sdrplay_api_RxChannelParamsT *ch_params;
+    int16_t samples_buf[128 * 256];
+#elif defined USE_SOAPY
+    SoapySDRDevice *dev;
+    FILE *iq_file;
+    SoapySDRStream *rx_stream;
+    int16_t samples_buf[128 * 256];
+#endif
     float freq;
     int mode;
+#ifdef USE_RTLSDR
     int gain;
     int auto_gain;
+#elif defined USE_SDRPLAY
+    float gain;
+#elif defined USE_SOAPY
+#define MAX_GAIN_SETTINGS_SIZE 128
+    char gain_settings[MAX_GAIN_SETTINGS_SIZE];
+#endif
     int stopped;
     int worker_stopped;
     int closed;

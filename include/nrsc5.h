@@ -651,7 +651,13 @@ NRSC5_API void nrsc5_program_type_name(unsigned int type, const char **name);
  * Other session options are initialized to defaults, e.g. mode to FM.
  * It creates (but does not start) a worker thread.
  */
-NRSC5_API int nrsc5_open(nrsc5_t **st, int device_index);
+#ifdef USE_RTLSDR
+NRSC5_API int nrsc5_open(nrsc5_t **, int device_index);
+#elif defined USE_SDRPLAY
+NRSC5_API int nrsc5_open(nrsc5_t **, char *device_serial, char *antenna);
+#elif defined USE_SOAPY
+NRSC5_API int nrsc5_open(nrsc5_t **, char *device_args);
+#endif
 
 /**
  * Initializes a session given an open `FILE` pointer.
@@ -677,7 +683,9 @@ NRSC5_API int nrsc5_open_pipe(nrsc5_t **st);
  * @return 0 on success, nonzero on error
  *
  */
+#ifdef USE_RTLSDR
 NRSC5_API int nrsc5_open_rtltcp(nrsc5_t **st, int socket);
+#endif
 
 /**
  * Closes an nrsc5 session.
@@ -733,7 +741,19 @@ NRSC5_API int nrsc5_set_bias_tee(nrsc5_t *st, int on);
  *
  * This works with both a local SDR and over a TCP connection.
  */
+#ifdef USE_RTLSDR
 NRSC5_API int nrsc5_set_direct_sampling(nrsc5_t *st, int on);
+#endif
+
+/**
+ * Select antenna.
+ * @param[in] st  pointer to an `nrsc5_t` session object
+ * @param[in] antenna  antenna name
+ * @return 0 on success or nonzero on error.
+ */
+#if defined USE_SDRPLAY || defined USE_SOAPY
+NRSC5_API int nrsc5_set_antenna(nrsc5_t *, char *antenna);
+#endif
 
 /**
  * Adjust the radio frequency correction.
@@ -774,7 +794,11 @@ NRSC5_API int nrsc5_set_frequency(nrsc5_t *st, float freq);
  * @param[out] gain in dB
  *
  */
+#if defined USE_RTLSDR || defined USE_SDRPLAY
 NRSC5_API void nrsc5_get_gain(nrsc5_t *st, float *gain);
+#elif defined USE_SOAPY
+NRSC5_API void nrsc5_get_gain(nrsc5_t *, char **gain_settings);
+#endif
 
 /**
  * Set the receiver gain.
@@ -784,7 +808,11 @@ NRSC5_API void nrsc5_get_gain(nrsc5_t *st, float *gain);
  * @return 0 on success or nonzero on error
  *
  */
+#if defined USE_RTLSDR || defined USE_SDRPLAY
 NRSC5_API int nrsc5_set_gain(nrsc5_t *st, float gain);
+#elif defined USE_SOAPY
+NRSC5_API int nrsc5_set_gain(nrsc5_t *, char *gain_settings);
+#endif
 
 /**
  * Enable or disable receiver auto-gain control.
@@ -793,7 +821,9 @@ NRSC5_API int nrsc5_set_gain(nrsc5_t *st, float gain);
  * @param[in] enabled  set to 1 to enable auto gain, 0 to disable
  *
  */
+#ifdef USE_RTLSDR
 NRSC5_API void nrsc5_set_auto_gain(nrsc5_t *st, int enabled);
+#endif
 
 /**
  * Establish a callback function.

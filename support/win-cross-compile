@@ -10,11 +10,12 @@ elif [ "$1" == 64 ]; then
     prefix=${root}/build-win64
     host=x86_64-w64-mingw32
 else
-    echo "Usage: $0 (32|64) [--cmake-args=\"options\"] [make flags]"
+    echo "Usage: $0 (32|64) (rtlsdr|sdrplay|soapy) [--cmake-args=\"options\"] [make flags]"
     exit 1
 fi
 shift
 
+SDR_DRIVER="$1"; shift
 if [[ "$1" == --cmake-args=* ]]; then
     CMAKE_ARGS="${1#*=}"
     shift
@@ -23,17 +24,36 @@ fi
 mkdir -p ${prefix}
 
 cd ${prefix}
-cmake \
-    -D CMAKE_SYSTEM_NAME=Windows \
-    -D CMAKE_C_COMPILER=${host}-gcc \
-    -D CMAKE_INSTALL_PREFIX=${prefix} \
-    -D USE_STATIC=ON \
-    -D USE_SYSTEM_LIBUSB=OFF \
-    -D USE_SYSTEM_RTLSDR=OFF \
-    -D USE_SYSTEM_LIBAO=OFF \
-    -D USE_SYSTEM_FFTW=OFF \
-    ${CMAKE_ARGS} \
-    ..
+case "$SDR_DRIVER" in
+    rtlsdr)
+        cmake \
+            -D CMAKE_SYSTEM_NAME=Windows \
+            -D CMAKE_C_COMPILER=${host}-gcc \
+            -D CMAKE_INSTALL_PREFIX=${prefix} \
+            -D USE_STATIC=ON \
+            -D USE_SYSTEM_LIBUSB=OFF \
+            -D USE_SYSTEM_RTLSDR=OFF \
+            -D USE_SYSTEM_LIBAO=OFF \
+            -D USE_SYSTEM_FFTW=OFF \
+            ${CMAKE_ARGS} \
+            ..
+        ;;
+    *)
+        cmake \
+            -D CMAKE_SYSTEM_NAME=Windows \
+            -D CMAKE_C_COMPILER=${host}-gcc \
+            -D CMAKE_INSTALL_PREFIX=${prefix} \
+            -D USE_STATIC=ON \
+            -D SDR_DRIVER="$SDR_DRIVER" \
+            -D USE_SYSTEM_LIBUSB=OFF \
+            -D USE_SYSTEM_RTLSDR=OFF \
+            -D USE_SYSTEM_LIBAO=OFF \
+            -D USE_SYSTEM_FFTW=OFF \
+            ${CMAKE_ARGS} \
+            ..
+        ;;
+esac
+
 
 # needed to ensure non-system libusb is seen by non-system rtlsdr during cmake
 export PKG_CONFIG_PATH=${prefix}/libusb-prefix/lib/pkgconfig:$PKG_CONFIG_PATH    
